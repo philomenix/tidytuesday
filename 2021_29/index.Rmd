@@ -1,10 +1,10 @@
 ---
 title: "Tidy Tuesday"
-date: "week 29, 2021"
+date: "WK 29, 2021"
 output:
   html_document:  
     df_print: paged
-    css: styles.css
+    css: ../css/styles.css
     highlight: tango
     toc: yes
     toc_float:
@@ -14,25 +14,28 @@ output:
 ---
 
 ```{r include = FALSE}
+rm(list = ls(all = TRUE))
+
 knitr::opts_chunk$set(
 	eval = TRUE,
 	echo = TRUE,
 	include = TRUE,
 	message = FALSE,
 	warning = FALSE,
+	fig.height = 6,
+	fig.width = 9.7, # height x 1.618 (golden ratio)
 	class.output="style-output",
   class.source="style-source"
 )
 
 options(
-  digits = 1,
-  rows.print = 20,
+  rows.print = 15,
   cols.print = 4,
   paged.print = TRUE
 )
 ```
 
-The dataset this week comes from [Kaggle](https://www.kaggle.com/williamschooleman/scoobydoo-complete) and contains all Scooby-Doo episodes. More info about Scooby Doo can be found on [ScoobyPedia](https://scoobydoo.fandom.com/wiki/Scoobypedia).
+The dataset this week comes from [Kaggle](https://www.kaggle.com/williamschooleman/scoobydoo-complete) and contains all Scooby Doo episodes. More info about Scooby Doo can be found on [ScoobyPedia](https://scoobydoo.fandom.com/wiki/Scoobypedia).
 
 # Setup
 
@@ -43,6 +46,7 @@ pacman::p_load(
   lubridate,
   magrittr,
   glue,
+  janitor,
   skimr,
   here
 )
@@ -55,23 +59,23 @@ Get data and write to local file
 ```{r eval = FALSE}
 tt_load(2021, week = 29) %>% 
   pluck("scoobydoo") %>% 
-  write_csv2(glue("{here()}/data.csv"))
+  write_csv2(here("data.csv"))
 ```
 
 Read data from local file (`d_raw`)
 
 ```{r}
 d_raw <- read_csv2(
-  glue("{here()}/data.csv"),
+  here("data.csv"),
   col_types = cols(.default = "c"),
   na = c("NA", "NULL")
 )
 ```
 
-Create working copy (`d`) and sort columns alphabetically
+Create working copy (`d`)
 
 ```{r}
-d <- d_raw %>% select(sort(colnames(.)))
+d <- d_raw
 ```
 
 # Inspection
@@ -108,9 +112,6 @@ col_lgl <- d %>%
     starts_with("unmask_")
   )) %>% 
   colnames()
-
-# inspect sample
-d %>% select(col_lgl) %>% slice_sample(n = 15)
 ```
 
 Names of columns that appear numeric at first glance
@@ -138,14 +139,11 @@ col_num <- c(
   "split_up",
   "suspects_amount",
   "zoinks")
-
-# inspect sample
-d %>% select(col_num) %>% slice_sample(n = 15)
 ```
 
 # Wrangling
 
-## Coercion
+## Types
 
 ### Date
 
@@ -238,7 +236,7 @@ The only non-numeric character in `imdb` is the decimal `.`, so this column can 
 col_num_final <- col_num[!(col_num %in% c("season", "number_of_snacks"))]
 ```
 
-I like to keep the original columns (temporarily) for easy verification.
+Keep the original columns (temporarily) for easy verification.
 
 ```{r}
 # convert to numeric and add suffix
@@ -264,7 +262,7 @@ d %<>%
   rename_with(~ str_remove(.x, "_num"))
 ```
 
-## Nested
+## Nesting
 
 Identify character columns containing ≥1 comma (might indicate nested data)
 
@@ -293,8 +291,8 @@ col_nested <-
 
 d %<>% mutate(
   across(
-    col_nested, 
-    ~ str_squish(str_split(.x, ","))
+    all_of(col_nested),
+      ~ str_squish(str_split(.x, ","))
   )
 )
 ```
@@ -310,15 +308,234 @@ d$monster_type %<>% str_split(",")
 d$monster_subtype %<>% str_split(",")
 ```
 
+## Rename
+
+Rename some columns for consistency and easy sorting
+```{r}
+# change suffix "_va" into prefix "va_" (voice actor)
+d %<>% rename_with( 
+  ~ glue("va_{str_remove(.x, '_va')}"), 
+  ends_with("_va"))
+```
+
+```{r}
+# add prefix "appears_" to indicate appearances in episodes
+d %<>% rename_with(
+  ~ glue("appears_{.x}"),
+  c(
+    "batman",
+    "scooby_dum",
+    "scrappy_doo",
+    "hex_girls",
+    "blue_falcon"
+  )
+)
+```
+
+```{r}
+# add prefix "quote_" to counts of words/phrases
+d %<>% rename_with(
+  ~ glue("quote_{.x}"),
+  c(
+    "jeepers",
+    "jinkies",
+    "my_glasses",
+    "just_about_wrapped_up",
+    "zoinks",
+    "groovy",
+    "scooby_doo_where_are_you",
+    "rooby_rooby_roo"
+  )
+)
+```
+
+```{r}
+# sort columns alphabetically
+d %<>% select(sort(colnames(.)))
+```
+
+## Reshape
+
+Create tidy subsets of the data
+
+### Captured
+
+```{r}
+d_captured <- d %>% 
+  select(index, starts_with("captured_")) %>% 
+  pivot_longer(
+    cols = starts_with("captured_"), 
+    names_to = "character",
+    values_to = "captured") %>% 
+  mutate(across(
+    "character", 
+    ~str_remove(.x, "captured_") %>% str_to_title()
+  ))
+
+d_captured %>% head()
+```
+
+### Caught
+
+```{r}
+d_caught <- d %>% 
+  select(index, starts_with("caught_")) %>% 
+  pivot_longer(
+    cols = starts_with("caught_"), 
+    names_to = "character",
+    values_to = "caught") %>% 
+  mutate(across(
+    "character", 
+    ~str_remove(.x, "caught_") %>% str_to_title()
+  ))
+
+d_caught %>% head()
+```
+
+### Unmask
+
+```{r}
+d_unmask <- d %>% 
+  select(index, starts_with("unmask_")) %>% 
+  pivot_longer(
+    cols = starts_with("unmask_"), 
+    names_to = "character",
+    values_to = "unmask") %>% 
+  mutate(across(
+    "character", 
+    ~str_remove(.x, "unmask_") %>% str_to_title()
+  ))
+
+d_unmask %>% head()
+```
+
+### Snack
+
+```{r}
+d_snack <- d %>% 
+  select(index, starts_with("snack_")) %>% 
+  pivot_longer(
+    cols = starts_with("snack_"), 
+    names_to = "character",
+    values_to = "snack") %>% 
+  mutate(across(
+    "character", 
+    ~str_remove(.x, "snack_") %>% str_to_title()
+  ))
+
+d_snack %>% head()
+```
+
+### Quote
+
+```{r}
+d_quote <- d %>%
+  select(index, starts_with("quote_")) %>%
+  pivot_longer(
+    cols = starts_with("quote_"),
+    names_to = "quote",
+    values_to = "n") %>%
+  mutate(across(
+    "quote",
+    ~ str_remove(.x, "quote_") %>%
+      str_replace_all("_", " ") %>%
+      str_to_sentence()
+  ))
+
+d_quote %>% head()
+```
+
+### Voice Actor
+
+```{r}
+d_voice <- d %>%
+  select(index, starts_with("va_")) %>%
+  pivot_longer(
+    cols = starts_with("va_"),
+    names_to = "character",
+    values_to = "voice") %>%
+  mutate(across(
+    "character",
+    ~ str_remove(.x, "va_") %>%
+      str_to_title()
+  ))
+
+d_voice %>% head()
+```
+
+### Monsters
+
+```{r}
+d_monster_type <- d %>% 
+  select(index, monster_type) %>% 
+  unnest(cols = c(monster_type)) %>% 
+  drop_na(monster_type) %>% 
+  filter(monster_type != "") %>% 
+  mutate(monster_type = str_trim(monster_type)) %>% 
+  mutate(monster_type = recode(
+    monster_type,
+    Disugised = "Disguised",
+    Disguise = "Disguised",
+    `Possessed Object` = "Possessed"))
+
+d_monster_type %>% head()
+```
+
+```{r}
+d_monster_subtype <- d %>% 
+  select(index, monster_subtype) %>% 
+  unnest(cols = c(monster_subtype)) %>% 
+  drop_na(monster_subtype) %>% 
+  filter(monster_subtype != "") %>% 
+  mutate(monster_subtype = str_trim(monster_subtype))
+
+d_monster_subtype %>% head()
+```
+
+```{r}
+d_monster_species <- d %>% 
+  select(index, monster_species) %>% 
+  unnest(cols = c(monster_species)) %>% 
+  drop_na(monster_species) %>% 
+  filter(monster_species != "") %>% 
+  mutate(monster_species = str_trim(monster_species))
+
+d_monster_species %>% head()
+```
+
+```{r}
+d_monster_gender <- d %>% 
+  select(index, monster_gender) %>% 
+  unnest(cols = c(monster_gender)) %>% 
+  drop_na(monster_gender) %>% 
+  filter(monster_gender != "") %>% 
+  mutate(monster_gender = str_trim(monster_gender))
+
+d_monster_gender %>% head()
+```
+
+
+### Culprits
+
+```{r}
+d_culprit <- d %>% 
+  select(index, culprit_gender) %>% 
+  unnest(cols = c(culprit_gender)) %>% 
+  drop_na(culprit_gender) %>% 
+  filter(culprit_gender != "") %>% 
+  mutate(culprit_gender = str_trim(culprit_gender))
+
+d_culprit %>% head()
+```
+
 # Clean Data
 
-Result of the data cleaning and wrangling.
-
+Main dataset after cleaning and wrangling.
 ```{r}
 d
 ```
 
-# Exploration
+# Descriptives
 
 ## Skim
 
@@ -326,60 +543,314 @@ d
 skim(d)
 ```
 
+## Shows
+
+Number of episodes and movies by decade
+
+```{r}
+d %>%
+  select(aired_decade, format) %>%
+  mutate(format = recode(
+    format,
+    `TV Series (segmented)` = "TV Series",
+    `Movie (Theatrical)` = "Movie"
+  )) %>%
+  group_by(aired_decade) %>%
+  count(format) %>%
+  pivot_wider(names_from = format,
+              values_from = n) %>%
+  mutate(across(
+    c("TV Series", "Crossover", "Movie"), 
+    ~ replace_na(.x, 0))) %>% 
+  rename(Decade = aired_decade)
+```
+
+## Rating
+
+IMDb rating by decade
+
+```{r}
+d %>% 
+  group_by(aired_decade) %>% 
+  rstatix::get_summary_stats(imdb) %>% 
+  select(-variable)
+```
+
+Highest rated show
+
+```{r}
+d %>% 
+  filter(imdb == max(imdb, na.rm = TRUE)) %>% 
+  select(aired_date, format, title, imdb) %>% 
+  rename(date = aired_date)
+```
+
+Lowest rated show
+
+```{r}
+d %>% 
+  filter(imdb == min(imdb, na.rm = TRUE)) %>% 
+  select(aired_date, format, title) %>% 
+  rename(date = aired_date)
+```
+
+## Captured
+
+```{r}
+d_captured %>% 
+  filter(!is.na(captured)) %>% 
+  tabyl(character, captured) %>%
+  adorn_percentages(denominator = "row") %>%
+  arrange(desc(`TRUE`)) %>%
+  adorn_pct_formatting() %>%
+  select(character, `TRUE`, `FALSE`)
+```
+
+## Caught
+
+```{r}
+d_caught %>% 
+  filter(!is.na(caught)) %>% 
+  tabyl(character, caught) %>%
+  adorn_percentages(denominator = "row") %>%
+  arrange(desc(`TRUE`)) %>%
+  adorn_pct_formatting() %>%
+  select(character, `TRUE`, `FALSE`)
+```
+
+## Unmask
+
+```{r}
+d_unmask %>% 
+  filter(!is.na(unmask)) %>% 
+  tabyl(character, unmask) %>%
+  adorn_percentages(denominator = "row") %>%
+  arrange(desc(`TRUE`)) %>%
+  adorn_pct_formatting() %>%
+  select(character, `TRUE`, `FALSE`)
+```
+
+## Snack
+
+```{r}
+d_snack %>%
+  filter(!is.na(snack)) %>%
+  tabyl(character, snack) %>%
+  adorn_percentages(denominator = "row") %>%
+  arrange(desc(`TRUE`)) %>%
+  adorn_pct_formatting() %>%
+  select(character, `TRUE`, `FALSE`)
+```
+
+## Quote
+
+```{r}
+d_quote %>% 
+  group_by(quote) %>% 
+  summarise(total = sum(n, na.rm = TRUE)) %>% 
+  arrange(desc(total))
+```
+
+## Voice Actor
+
+```{r}
+d_voice %>% 
+  drop_na(voice) %>% 
+  group_by(character) %>% 
+  count(voice)
+```
+
+## Monsters
+
+### Monster gender
+
+```{r}
+d_monster_gender %>% 
+  tabyl(monster_gender) %>% 
+  arrange(desc(n)) %>% 
+  adorn_pct_formatting() %>% 
+  rename(gender = monster_gender)
+```
+
+### Monster type
+
+Top 10 of most frequent monster types
+
+```{r}
+d_monster_type %>% 
+  tabyl(monster_type) %>% 
+  slice_max(order_by = n, n = 10) %>% 
+  adorn_pct_formatting() %>% 
+  rename(type = monster_type)
+```
+
+### Monster subtype 
+
+Top 10 of most frequent monster subtypes
+
+```{r}
+d_monster_subtype %>% 
+  tabyl(monster_subtype) %>% 
+  slice_max(order_by = n, n = 10) %>% 
+  adorn_pct_formatting() %>% 
+  rename(subtype = monster_subtype)
+```
+
+### Monster species
+
+Top 10 of most frequent monster species
+
+```{r}
+d_monster_species %>% 
+  tabyl(monster_species) %>% 
+  slice_max(order_by = n, n = 10) %>% 
+  adorn_pct_formatting() %>% 
+  rename(species = monster_species)
+```
+
+
+## Culprits
+
+```{r}
+d_culprit %>% 
+  tabyl(culprit_gender) %>% 
+  arrange(desc(n)) %>% 
+  adorn_pct_formatting() %>% 
+  rename(gender = culprit_gender)
+```
+
+## Motives
+
+```{r}
+d %>% 
+  drop_na(motive) %>% 
+  tabyl(motive) %>% 
+  slice_max(order_by = n, n = 10) %>% 
+  adorn_pct_formatting()
+```
+
 # Visualization
 
-## Monsters are male
-
 ```{r}
-plotdata <- d %>%
-  select(aired_decade, monster_gender) %>%
-  unnest(monster_gender) %>%
-  group_by(aired_decade, monster_gender) %>%
-  filter(monster_gender %in% c("Male", "Female")) %>%
-  tally()
-
-plotdata %>% slice_sample(n = 10)
-
-ggplot(plotdata, aes(
-  fill = as.factor(monster_gender),
-  y = n,
-  x = as.factor(aired_decade)
-)) +
-  geom_bar(position = "fill", stat = "identity")
+ggplot(
+  d %>% 
+    select(aired_decade, monster_gender) %>%
+    unnest(monster_gender) %>%
+    group_by(aired_decade, monster_gender) %>%
+    filter(monster_gender %in% c("Male", "Female")) %>%
+    tally(), 
+  aes(
+    fill = as.factor(monster_gender),
+    y = n,
+    x = as.factor(aired_decade)
+  )) +
+  labs(
+    title = "Monsters gender",
+    subtitle = "Male and female monsters by decade in Scooby Doo",
+    x = "decade aired",
+    y = "") +
+  geom_bar(position = "fill", stat = "identity", linetype = "blank") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(
+    values = c("Female" = "lightpink", "Male" = "skyblue"), 
+    name = "Gender") +
+  hrbrthemes::theme_ipsum_rc()
 ```
 
-> ## ... and so are culprits!
-
 ```{r}
-gd <- d %>% 
-  select(aired_year, culprit_gender) %>% 
-  unnest(culprit_gender) %>% 
-  mutate(culprit_gender = str_squish(culprit_gender)) %>% 
-  group_by(aired_year, culprit_gender) %>% 
-  filter(!(culprit_gender %in% c("", "None"))) %>% 
-  tally()
-
-ggplot(gd, aes(
-  fill = as.factor(culprit_gender),
-  y = n,
-  x = as.factor(aired_year)
-)) + geom_bar(position = "fill", stat = "identity")
+ggplot(
+  d %>% 
+    select(aired_decade, culprit_gender) %>% 
+    unnest(cols = c(culprit_gender)) %>% 
+    drop_na(culprit_gender) %>% 
+    filter(culprit_gender != "") %>% 
+    mutate(culprit_gender = str_trim(culprit_gender)) %>% 
+    group_by(aired_decade, culprit_gender) %>%
+    tally(), 
+  aes(
+    fill = fct_rev(as.factor(culprit_gender)),
+    y = n,
+    x = fct_rev(as.factor(aired_decade))
+  )) +
+  labs(
+    title = "Culprit gender",
+    subtitle = "Male and female culprits by decade in Scooby Doo",
+    x = "Decade aired",
+    y = "") +
+  ggchicklet::geom_chicklet(
+    position = position_fill(), 
+    radius = grid::unit(5, "pt")) +
+  scale_y_continuous(
+    labels = scales::percent) +
+  scale_fill_manual(
+    values = c("Female" = "lightpink", "Male" = "skyblue"), 
+    name = "Gender") +
+    coord_flip() +
+  hrbrthemes::theme_ipsum_rc()
 ```
 
-## 
+```{r}
+sort_order <- d_captured %>% 
+  filter(captured) %>% 
+  count(character) %>% 
+  arrange(n) %>% 
+  pull(character)
+
+ggplot(
+    left_join(d_captured, select(d, index, aired_decade)) %>%
+      filter(captured) %>%
+      rename(decade = aired_decade) %>%
+      group_by(decade, character) %>%
+      tally() %>%
+      rename(captured = n),
+    aes(
+      x = fct_relevel(as.factor(character), sort_order), 
+      fill = as.factor(decade), 
+      y = captured)
+  ) +
+  ggchicklet::geom_chicklet(radius = grid::unit(5, "pt")) +
+  scale_fill_viridis_d(option = "viridis", direction = -1) +
+  labs(
+    x = "Character",
+    y = "Cumulative count",
+    title = "Captured",
+    subtitle = "By character and decade",
+    caption = "Created by Philomenix",
+    fill = "Decade") +
+  coord_flip() +
+  hrbrthemes::theme_ipsum_rc()
+```
 
 ```{r}
-gd <- d %>%
-  select(starts_with("unmask_")) %>%
-  rename_with( ~ str_remove(.x, "unmask_")) %>%
-  pivot_longer(1:6, names_to = "name") %>% 
-  group_by(name, value) %>% 
-  filter(!is.na(value)) %>% 
-  tally()
+sort_order <- d_caught %>% 
+  filter(caught & !(character %in% c("Not", "Other"))) %>% 
+  count(character) %>% 
+  arrange(n) %>% 
+  pull(character)
 
-ggplot(gd, aes(x="", y = n, fill = value)) +
-  geom_bar(stat="identity", width=1) +
-  coord_polar("y", start = 0) + 
-  facet_wrap(~ name, ncol = 2) +
-  theme_void()
+ggplot(
+    left_join(d_caught, select(d, index, aired_decade)) %>%
+      filter(caught) %>%
+      filter(!(character %in% c("Not", "Other"))) %>% 
+      rename(decade = aired_decade) %>%
+      group_by(decade, character) %>%
+      tally() %>%
+      rename(caught = n),
+    aes(
+      x = fct_relevel(as.factor(character), sort_order), 
+      fill = as.factor(decade), 
+      y = caught)
+  ) +
+  ggchicklet::geom_chicklet(radius = grid::unit(5, "pt")) +
+  scale_fill_viridis_d(option = "viridis", direction = -1) +
+  labs(
+    x = "Character",
+    y = "Cumulative count",
+    title = "Caught",
+    subtitle = "By character and decade",
+    caption = "Created by Philomenix",
+    fill = "Decade") +
+  coord_flip() +
+  hrbrthemes::theme_ipsum_rc()
 ```
+
