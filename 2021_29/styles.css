@@ -1,0 +1,290 @@
+/*--------------*/
+/* Google Fonts */
+/*--------------*/
+
+@import url('https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=JetBrains+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800&family=Lobster&display=swap');
+
+/*---------------*/
+/* CSS Variables */
+/*---------------*/
+
+:root {
+    --light: #f7f7f7;
+    --dark: #021728;
+    --hover: #87ceeb;
+    --title: "Lobster", cursive;
+    --text: "Barlow", sans-serif;
+    --code: "JetBrains Mono", monospace;
+}
+
+/*------------*/
+/* Style Text */
+/*------------*/
+
+body{
+    font-family: var(--text);
+}
+
+h1, h2, h3, h4, h5, h6, p {
+    color: var(--dark);
+}
+
+h1{
+    font-family: var(--title);
+    font-size: 32px;
+    font-weight: 400;
+    margin: 50px 0 0 0;
+    text-align: center;
+}
+
+h1::after{
+    content: "";
+    display: block;
+    border-top: 3px double rgb(201, 201, 201);
+    width: 5%;
+    margin: 25px auto;
+}
+
+.title::after{
+    display: none;
+}
+
+h2{
+    font-family: var(--text);
+    font-size: 26px;
+    margin-top: 40px;
+}
+
+h3{
+    font-family: var(--text);
+    font-size: 22px;
+    font-style: italic;
+    margin-top: 30px;
+}
+
+p{
+    font-size: 18px;
+    line-height: 1.4;
+    margin: 20px 0;
+}
+
+.title {
+    font-size: 48px;
+}
+
+.date {
+    font-size: 14px;
+    opacity: 0.35;
+    padding: 10px 0;
+    text-align: center;
+}
+
+/*--------*/
+/* Tables */
+/*--------*/
+
+thead>tr>th {
+  font-family: var(--text) !important;
+  font-weight: 600 !important;
+  font-style: italic !important;
+  font-size: 16px !important;
+  text-align: left !important;
+}
+
+tbody>tr>td{
+  font-family: var(--text) !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  text-align: left !important;
+}
+
+.pagedtable-wrapper {
+    border: none;
+    margin: 50px 0;
+}
+
+.pagedtable .even, .pagedtable .odd {
+    background-color: white;
+}
+
+.pagedtable-header-type{
+    font-style: italic;
+}
+
+/*-----------*/
+/* Numbering */
+/*-----------*/
+
+.header-section-number{
+    display: none;
+}
+
+.tocify-item .header-section-number{
+    display: inline;
+}
+
+/*-------------------*/
+/* Table of Contents */
+/*-------------------*/
+
+#TOC{
+    border: none;
+}
+
+.tocify{
+    border-radius: 0;
+}
+
+.tocify-item{
+    border-radius: 10px !important;
+    border: none;
+    font-size: 17px;
+    font-weight: 400;
+    margin-bottom: 4px !important;
+}
+
+.tocify-subheader .tocify-item{
+    font-size: 15px !important;
+}
+
+.tocify-item:hover, .tocify-item.active:hover{
+    background-color: var(--hover);
+    color: linen;
+}
+
+.tocify-item.active {
+    background-color: var(--dark);
+    color: linen;
+}
+
+/*
+ul.tocify-header:nth-child(9n + 1) .tocify-item:hover, ul.tocify-header:nth-child(9n + 1) .tocify-item.active:hover { background-color: #28a745;}
+ul.tocify-header:nth-child(9n + 2) .tocify-item:hover, ul.tocify-header:nth-child(9n + 2) .tocify-item.active:hover { background-color: #20c997;}
+ul.tocify-header:nth-child(9n + 3) .tocify-item:hover, ul.tocify-header:nth-child(9n + 3) .tocify-item.active:hover { background-color: #17a2b8;}
+ul.tocify-header:nth-child(9n + 4) .tocify-item:hover, ul.tocify-header:nth-child(9n + 4) .tocify-item.active:hover { background-color: #007bff;}
+ul.tocify-header:nth-child(9n + 5) .tocify-item:hover, ul.tocify-header:nth-child(9n + 5) .tocify-item.active:hover { background-color: #6f42c1;}
+ul.tocify-header:nth-child(9n + 6) .tocify-item:hover, ul.tocify-header:nth-child(9n + 6) .tocify-item.active:hover { background-color: #e83e8c;}
+ul.tocify-header:nth-child(9n + 7) .tocify-item:hover, ul.tocify-header:nth-child(9n + 7) .tocify-item.active:hover { background-color: #dc3545;}
+ul.tocify-header:nth-child(9n + 8) .tocify-item:hover, ul.tocify-header:nth-child(9n + 8) .tocify-item.active:hover { background-color: #fd7e24;}
+ul.tocify-header:nth-child(9n + 9) .tocify-item:hover, ul.tocify-header:nth-child(9n + 9) .tocify-item.active:hover { background-color: #ffc107;}
+*/
+
+/*-----------------*/
+/* Code and Output */
+/*-----------------*/
+
+pre,
+code {
+    font-family: var(--code);
+    font-size: 16px;
+    font-weight: 400 !important;
+}
+
+code {
+    border-radius: 5px;
+    border: none;
+    line-height: 1.5;
+}
+    
+
+.style-source {
+    background-color: var(--dark) !important;
+    border-radius: 10px;
+    border: none;
+    color: linen;
+}
+
+.style-output {
+    background-color: var(--light);
+    border-radius: 10px;
+    border: none;
+    color: #858a8a;
+}
+
+.style-output code{
+    font-size: 14px;
+    font-weight: 300;
+}
+
+/*--------*/
+/* Images */
+/*--------*/
+
+img{
+    display: inline-block;
+    margin: 50px auto;
+}
+
+/***********************/
+/* Syntax Highlighting */
+/***********************/
+
+/* functions */
+code span.fu {
+    color: #87ceeb;
+}
+
+/* attributes */
+code span.at {
+    color: #abe2cb;
+}
+
+/* control flow */
+code span.cf {
+    color: #87ceeb;
+}
+
+/* strings, characters */
+code span.ch,
+code span.st {
+    color: #c792ea;
+}
+
+/* operators, special characters (like %>%, %in%, $) */
+code span.op,
+code span.sc,
+code span.ss {
+    color: #ffb6c1;
+}
+
+/* numbers */
+code span.dv,
+code span.fl {
+    color: #f78c6c;
+}
+
+/* alerts, errors, warnings */
+code span.al,
+code span.er,
+code span.wa {
+    color: hotpink;
+}
+
+/* keywords, constants, booleans */
+code span.kw,
+code span.cn {
+    color: #ffb6c1;
+}
+
+/* comments, annotations */
+code span.an,
+code span.co,
+code span.cv {
+    color: #637777;
+    font-style: normal !important;
+}
+
+/* other */
+code span.do,
+code span.dt,
+code span.ex,
+code span.im,
+code span.in,
+code span.ot,
+code span.pp,
+code span.va,
+code span.vs,
+code span.bn,
+code span.bu {
+    color: linen;
+}

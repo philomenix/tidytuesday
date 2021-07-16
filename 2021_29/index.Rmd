@@ -1,0 +1,385 @@
+---
+title: "Tidy Tuesday"
+date: "week 29, 2021"
+output:
+  html_document:  
+    df_print: paged
+    css: styles.css
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: no
+    number_sections: yes
+---
+
+```{r include = FALSE}
+knitr::opts_chunk$set(
+	eval = TRUE,
+	echo = TRUE,
+	include = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	class.output="style-output",
+  class.source="style-source"
+)
+
+options(
+  digits = 1,
+  rows.print = 20,
+  cols.print = 4,
+  paged.print = TRUE
+)
+```
+
+The dataset this week comes from [Kaggle](https://www.kaggle.com/williamschooleman/scoobydoo-complete) and contains all Scooby-Doo episodes. More info about Scooby Doo can be found on [ScoobyPedia](https://scoobydoo.fandom.com/wiki/Scoobypedia).
+
+# Setup
+
+```{r}
+pacman::p_load(
+  tidytuesdayR,
+  tidyverse,
+  lubridate,
+  magrittr,
+  glue,
+  skimr,
+  here
+)
+```
+
+# Raw Data
+
+Get data and write to local file
+
+```{r eval = FALSE}
+tt_load(2021, week = 29) %>% 
+  pluck("scoobydoo") %>% 
+  write_csv2(glue("{here()}/data.csv"))
+```
+
+Read data from local file (`d_raw`)
+
+```{r}
+d_raw <- read_csv2(
+  glue("{here()}/data.csv"),
+  col_types = cols(.default = "c"),
+  na = c("NA", "NULL")
+)
+```
+
+Create working copy (`d`) and sort columns alphabetically
+
+```{r}
+d <- d_raw %>% select(sort(colnames(.)))
+```
+
+# Inspection
+
+```{r}
+d
+```
+
+```{r}
+glimpse(d)
+```
+
+## Coltypes
+
+Names of columns that appear logical at first glance
+
+```{r}
+# specify columns
+col_lgl <- d %>% 
+  select(c(
+    "arrested",
+    "batman",
+    "blue_falcon",
+    "door_gag",
+    "hex_girls",
+    "monster_real",
+    "non_suspect",
+    "scooby_dum",
+    "scrappy_doo",
+    "trap_work_first",
+    starts_with("captured_"),
+    starts_with("caught_"),
+    starts_with("snack_"),
+    starts_with("unmask_")
+  )) %>% 
+  colnames()
+
+# inspect sample
+d %>% select(col_lgl) %>% slice_sample(n = 15)
+```
+
+Names of columns that appear numeric at first glance
+
+```{r}
+# specify columns
+col_num <- c(
+  "another_mystery",
+  "culprit_amount",
+  "engagement",
+  "groovy",
+  "imdb",
+  "index",
+  "jeepers",
+  "jinkies",
+  "just_about_wrapped_up",
+  "monster_amount",
+  "my_glasses",
+  "number_of_snacks",
+  "rooby_rooby_roo",
+  "run_time",
+  "scooby_doo_where_are_you",
+  "season",
+  "set_a_trap",
+  "split_up",
+  "suspects_amount",
+  "zoinks")
+
+# inspect sample
+d %>% select(col_num) %>% slice_sample(n = 15)
+```
+
+# Wrangling
+
+## Coercion
+
+### Date
+
+Parse date from character vector `date_aired`
+
+```{r}
+# parse date
+d %<>% mutate(aired_date = ymd(date_aired))
+
+# verify result
+d %>% 
+  select(date_aired, aired_date) %>% 
+  slice_sample(n = 15)
+
+# drop original column
+d %<>% select(-date_aired)
+```
+
+Extract date elements from `aired_date`
+
+```{r}
+# get year and month
+d %<>% mutate(
+  aired_year = year(aired_date),
+  aired_month = month(aired_date, label = TRUE)
+) 
+
+# get decade
+d %<>% mutate(
+  aired_decade = glue("{floor(aired_year/10) * 10}s")
+) %>% as_factor()
+
+# verify result
+d %>% select(
+    aired_date,
+    aired_year,
+    aired_month,
+    aired_decade) %>% 
+  slice_sample(n = 15)
+```
+
+### Logical
+
+Show all unique values in the columns that are presumed to be logical to manually verify this assumption.
+
+```{r}
+# print unique values
+d %>% 
+  select(col_lgl) %>% 
+  map(~unique(.x)) %>% 
+  flatten_chr() %>% 
+  unique()
+```
+
+There are indeed no other values than `"TRUE"`/`"FALSE"` or `NA`.
+
+```{r}
+# convert to logical
+d %<>% mutate(across(col_lgl, as.logical))
+
+# verify result
+d %>% select(col_lgl) %>% slice_sample(n = 15)
+```
+
+### Numeric
+
+Do the (presumed) numeric columns contain non-numeric characters?
+
+```{r}
+# store unique values per column
+uniq <- d %>% 
+  select(col_num) %>% 
+  map(~unique(.x)) 
+
+# identify columns with non-numeric characters
+non_num <- uniq %>%
+  map( ~ str_detect(.x, "\\D") %>%
+         replace_na(FALSE) %>%
+         any()) %>%
+  flatten_lgl()
+
+# print unique values in columns with non-numeric characters
+uniq[non_num]
+```
+
+The only non-numeric character in `imdb` is the decimal `.`, so this column can easily be converted to numeric. On the other hand, for `season` and `number_of_snacks` this doesn't make sense.
+
+```{r}
+# exclude season and number of snacks
+col_num_final <- col_num[!(col_num %in% c("season", "number_of_snacks"))]
+```
+
+I like to keep the original columns (temporarily) for easy verification.
+
+```{r}
+# convert to numeric and add suffix
+d_num <- d %>% 
+  select(all_of(col_num_final)) %>%  
+  map_dfr(as.numeric) %>% 
+  rename_with( ~ glue("{.x}_num"))
+
+# bind converted data to original data
+d %<>% bind_cols(d_num)
+
+# sort columns alphabetically
+d %<>% select(sort(colnames(.)))
+
+# verify result
+d %>% select(sort(c(
+  col_num_final, glue("{col_num_final}_num")
+))) %>% slice_sample(n = 15)
+
+# drop old columns and remove suffix from new columns
+d %<>%
+  select(-(col_num_final)) %>%
+  rename_with(~ str_remove(.x, "_num"))
+```
+
+## Nested
+
+Identify character columns containing ≥1 comma (might indicate nested data)
+
+```{r}
+d_chr <- d %>% select(where(is.character))
+d_chr[d_chr %>%
+        map( ~ any(str_detect(.x, ","))) %>%
+        flatten_lgl() %>%
+        replace_na(FALSE)]
+```
+
+Create nested list columns where applicable
+
+```{r eval = FALSE}
+# note to self: not working, figure out why...
+col_nested <-
+  c(
+    "culprit_gender",
+    "culprit_name",
+    "monster_gender",
+    "monster_name",
+    "monster_species",
+    "monster_type",
+    "monster_subtype"
+  )
+
+d %<>% mutate(
+  across(
+    col_nested, 
+    ~ str_squish(str_split(.x, ","))
+  )
+)
+```
+
+```{r}
+# the non-elegant -but working- alternative
+d$culprit_gender %<>% str_split(",")
+d$culprit_name %<>% str_split(",")
+d$monster_gender %<>% str_split(",")
+d$monster_name %<>% str_split(",")
+d$monster_species %<>% str_split(",")
+d$monster_type %<>% str_split(",")
+d$monster_subtype %<>% str_split(",")
+```
+
+# Clean Data
+
+Result of the data cleaning and wrangling.
+
+```{r}
+d
+```
+
+# Exploration
+
+## Skim
+
+```{r}
+skim(d)
+```
+
+# Visualization
+
+## Monsters are male
+
+```{r}
+plotdata <- d %>%
+  select(aired_decade, monster_gender) %>%
+  unnest(monster_gender) %>%
+  group_by(aired_decade, monster_gender) %>%
+  filter(monster_gender %in% c("Male", "Female")) %>%
+  tally()
+
+plotdata %>% slice_sample(n = 10)
+
+ggplot(plotdata, aes(
+  fill = as.factor(monster_gender),
+  y = n,
+  x = as.factor(aired_decade)
+)) +
+  geom_bar(position = "fill", stat = "identity")
+```
+
+> ## ... and so are culprits!
+
+```{r}
+gd <- d %>% 
+  select(aired_year, culprit_gender) %>% 
+  unnest(culprit_gender) %>% 
+  mutate(culprit_gender = str_squish(culprit_gender)) %>% 
+  group_by(aired_year, culprit_gender) %>% 
+  filter(!(culprit_gender %in% c("", "None"))) %>% 
+  tally()
+
+ggplot(gd, aes(
+  fill = as.factor(culprit_gender),
+  y = n,
+  x = as.factor(aired_year)
+)) + geom_bar(position = "fill", stat = "identity")
+```
+
+## 
+
+```{r}
+gd <- d %>%
+  select(starts_with("unmask_")) %>%
+  rename_with( ~ str_remove(.x, "unmask_")) %>%
+  pivot_longer(1:6, names_to = "name") %>% 
+  group_by(name, value) %>% 
+  filter(!is.na(value)) %>% 
+  tally()
+
+ggplot(gd, aes(x="", y = n, fill = value)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start = 0) + 
+  facet_wrap(~ name, ncol = 2) +
+  theme_void()
+```
