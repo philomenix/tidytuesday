@@ -1,0 +1,1 @@
+["#e3ded3","#da3238","#e3ded3","#e3ded3","#d63962","#e3ded3","#c93d86","#e3ded3","#88348c","#e3ded3","#553594","#e3ded3","#404b9e","#e3ded3","#e3ded3","#e3ded3","#e3ded3","#2b61a9","#e3ded3","#e3ded3","#e3ded3","#e3ded3","#1677b4","#e3ded3","#e3ded3","#e3ded3","#e3ded3","#1f8aa8","#e3ded3","#369b90","#e3ded3","#55ab72","#77bb52","#e3ded3"]

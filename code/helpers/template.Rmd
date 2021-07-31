@@ -1,0 +1,237 @@
+---
+title: "XXX"
+date: "WK XXX, 2021"
+output:
+  html_document:  
+    df_print: paged
+    css: ../../css/pastel.css
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: no
+    number_sections: yes
+---
+
+```{r include = FALSE}
+# clear workspace
+rm(list = ls(all = TRUE))
+
+# year and week
+yr <- 0
+wk <- 0
+
+# chunk options
+knitr::opts_chunk$set(
+	eval = TRUE,
+	echo = TRUE,
+	include = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	fig.height = 10,
+	fig.width = 10,
+	dpi = 96,
+	class.output="style-output",
+  class.source="style-source"
+)
+
+# set options
+options(
+  digits = 3,
+  rows.print = 10,
+  cols.print = 4,
+  paged.print = TRUE
+)
+
+# set locale
+Sys.setlocale(category = "LC_ALL", locale = "en_US.UTF-8")
+
+# helper functions
+source(here::here("code", "helpers", "helpers.R"), local = knitr::knit_global())
+```
+
+# Result
+
+```{r echo = FALSE}
+knitr::include_graphics(here::here("plot", glue::glue("{yr}_{wk}.png")))
+```
+
+# Setup
+
+```{r}
+pacman::p_load(
+  glue,
+  here,
+  janitor,
+  lubridate,
+  magrittr,
+  skimr,
+  tidyverse
+)
+```
+
+```{r include = FALSE}
+library(rvest)
+
+tt_year <- glue("https://github.com/rfordatascience/tidytuesday/tree/master/data/{yr}")
+tt_info <- read_html(tt_year) %>% 
+  html_element("table") %>% 
+  html_table() %>% 
+  filter(Week == wk)
+
+tt_date <- tt_info$Date
+tt_title <- tt_info$Data
+tt_source <- tt_info$Source
+
+tt_week <- glue("https://github.com/rfordatascience/tidytuesday/blob/master/data/{yr}/{tt_date}")
+
+tt_dictionary <- read_html(tt_week) %>% 
+  html_element("table") %>% 
+  html_table()
+```
+
+# Background
+
+Background information: [Tidy Tuesday](`r tt_week`)  
+Data source: `r tt_source`  
+
+## Data Dictionary  
+
+```{r echo = FALSE, rows.print = 12}
+tt_dictionary %>% mutate(description = str_to_lower(description)) %>% select(-class)
+```
+
+# Raw Data
+
+Get data and write to local file
+
+```{r eval = FALSE}
+tidytuesdayR::tt_load(yr, week = wk) %>% 
+  pluck("XXX") %>% 
+  write_csv(here("data", glue("data_{yr}_{wk}.csv")))
+```
+
+Read data from local file (`d_raw`) and create working copy (`d`)
+
+```{r}
+# raw data
+d_raw <- read_csv(
+  here("data", glue("data_{yr}_{wk}.csv")),
+  col_types = cols(.default = "c"),
+  na = c("NA", "NULL", "")
+)
+# working copy
+d <- d_raw
+```
+
+# Inspection
+
+```{r}
+d
+```
+
+```{r}
+glimpse(d)
+```
+
+# Coercion
+
+# Wrangling
+
+# Exploration
+
+```{r}
+skim(d)
+```
+
+# Visualization
+
+## Setup
+
+### Size
+
+Set height and width in pixels, and resolution in ppi
+
+```{r}
+h <- 1000
+ratio <- 1.618
+w <- h * ratio
+ppi <- 300
+```
+
+Unit lookup table, assuming `r ppi` ppi
+
+```{r echo = FALSE,  }
+tribble(
+  ~unit, ~width, ~height,
+  "px", w, h, 
+  "in", px2in(w, ppi = ppi), px2in(h, ppi = ppi),
+  "pt", px2pt(w, ppi = ppi), px2pt(h, ppi = ppi),
+  "mm", px2mm(w, ppi = ppi), px2mm(h, ppi = ppi),
+  "cm", px2mm(w, ppi = ppi) / 10, px2mm(h, ppi = ppi) / 10, 
+  "ppi", ppi, ppi
+)
+```
+
+### Font
+
+```{r}
+sysfonts::font_add_google(name = "Barlow Semi Condensed", family = "barlow")
+showtext::showtext_auto()
+font_main <- "barlow"
+```
+
+### Color
+
+```{r}
+color_txt <- "black"
+color_bg <- "white"
+```
+
+### Text
+
+```{r}
+title <- ""
+subtitle <- ""
+caption <- glue("Tidy Tuesday ∙ Week {wk} ∙ {yr} ∙ Data: {tt_source} ∙ Created by Philomenix")
+```
+
+### Theme
+
+```{r}
+# set theme
+```
+
+## Plot
+
+```{r}
+# draw plot
+```
+
+## Save
+
+Save in project folder
+```{r}
+ggsave(
+  filename = "final.png",
+  plot = plot,
+  device = "png",
+  path = here("code", glue("{yr}_{wk}"), "img"),
+  width = w,
+  height = h,
+  units = "px"
+)
+```
+
+Copy to main plot folder
+```{r}
+file.copy(
+  from = here("code", glue("{yr}_{wk}"), "img", "final.png"),
+  to = here("plot", glue("{yr}_{wk}.png"))
+)
+```
+
+Final result
+```{r echo = FALSE}
+knitr::include_graphics(here("plot", glue("{yr}_{wk}.png")))
+```
