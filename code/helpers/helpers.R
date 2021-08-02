@@ -42,3 +42,16 @@ pal_length <- function(colors, n){
   hex
 }
 
+# Palettes ----
+pal_spectrum <- c(
+  "#5f4690",
+  "#1d6996",
+  "#38a6a5",
+  "#0f8554",
+  "#73af48",
+  "#edad08",
+  "#e17c05",
+  "#cc503e",
+  "#94346e",
+  "#6f4070"
+)

@@ -63,7 +63,6 @@ knitr::include_graphics(here::here("result", glue::glue("{yr}_{wk}_1.png")))
 
 ```{r}
 pacman::p_load(
-  chorddiag,
   circlize,
   glue,
   here,
@@ -92,15 +91,14 @@ tt_dictionary <- glue("https://github.com/rfordatascience/tidytuesday/blob/maste
 
 # Background
 
-Background information: [Tidy Tuesday](`r glue("https://github.com/rfordatascience/tidytuesday/blob/master/data/{yr}/{tt_info$Date}")`)  
-Data source: [Kaggle](https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results)  
+Background information: [Tidy Tuesday](https://github.com/rfordatascience/tidytuesday/blob/master/data/2021/2021-07-27/readme.md)  
+Data source: [Kaggle](https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results)
 
 ## Tidy Tuesday
 
-```{r cols.print = 5}
-tt_info
+```{r echo = FALSE, cols.print = 5}
+tt_info %>% t() %>% as.data.frame() %>% rename(value = V1)
 ```
-
 
 ## Data Dictionary
 
@@ -174,11 +172,11 @@ athlete_game <- d %>%
 ggplot(athlete_game, aes(x = year, y = n, color = season)) +
   geom_line() +
   labs(title = "Number of athletes at the Olympic games") +
-  scale_y_continuous(name = "Participants") +
+  scale_y_continuous(name = "Athletes") +
   scale_x_continuous(name = "Year")
 ```
 
-### Sex of Athletes
+### Sex
 
 ```{r}
 ggplot(count(d, year, sex), aes(x = as.factor(year), y = n, fill = sex)) +
@@ -193,46 +191,199 @@ ggplot(count(d, year, sex), aes(x = as.factor(year), y = n, fill = sex)) +
   )
 ```
 
-### Age of Athletes
+### Age
 
-The youngest athlete —*`r filter(d, age == min(age, na.rm = TRUE)) %>% pull(name)`*— was only `r filter(d, age == min(age, na.rm = TRUE)) %>% pull(age)` years old.
+**Youngest**
+
 ```{r}
-filter(d, age == min(age, na.rm = TRUE))
+youngest <- filter(d, age == min(age, na.rm = TRUE))
 ```
 
-The oldest athlete —*`r filter(d, age == max(age, na.rm = TRUE)) %>% pull(name)`*— was `r filter(d, age == max(age, na.rm = TRUE)) %>% pull(age)` years old. He competed in the Art Competitions. 
-```{r}
-filter(d, age == max(age, na.rm = TRUE))
-filter(d, sport != "Art Competitions") %>% filter(age == max(age, na.rm = TRUE))
+The youngest athlete ---*`r youngest$name`*--- was only `r youngest$age` years old when he participated in the `r youngest$games` Olympics (in `r youngest$sport`).
+
+```{r echo = FALSE}
+youngest
 ```
 
+**Oldest**
+
+```{r}
+oldest <- filter(d, age == max(age, na.rm = TRUE))
+```
+
+The oldest athlete ---*`r oldest$name`*--- was `r oldest$age` years old when he participated in the `r oldest$games` Olympics (in `r oldest$sport`).
+
+```{r echo = FALSE}
+oldest
+```
+
+**Age by sport**
 
 ```{r fig.height=18}
-ggplot(d, aes(
-  x = fct_rev(as.factor(sport)),
-  y = age,
-  fill = sport
-)) +
+ggplot(
+  filter(d, !is.na(age)), 
+  aes(
+    x = fct_rev(as.factor(sport)),
+    y = age,
+    fill = sport
+  )) +
   geom_violin(color = NA) +
   scale_fill_manual(values = pal_length(
-    c(
-      "#5f4690",
-      "#1d6996",
-      "#38a6a5",
-      "#0f8554",
-      "#73af48",
-      "#edad08",
-      "#e17c05",
-      "#cc503e",
-      "#94346e",
-      "#6f4070"
-    ),
+    pal_spectrum,
     length(unique(d$sport))
   )) +
   coord_flip() +
   theme(legend.position = "none", axis.title.y = element_blank())
 ```
 
+### Weight
+
+**Lightest**
+
+```{r}
+lightest <- d %>% 
+  group_by(sex) %>% 
+  filter(weight == min(weight, na.rm = TRUE)) %>% 
+  select(name, sex, height, weight, team, sport) %>% 
+  distinct()
+```
+
+The lightest male was `r filter(lightest, sex =="M") %>% pull(name)` with `r filter(lightest, sex =="M") %>% pull(weight)` kg.  
+The lightest female was `r filter(lightest, sex =="F") %>% pull(name)` with `r filter(lightest, sex =="F") %>% pull(weight)` kg.  
+
+```{r}
+lightest
+```
+Note: the lightest male may be a data error, considering his height, and unlikely BMI of `r filter(lightest, sex =="M") %>% mutate(bmi = weight / (height/100)^2 ) %>% pull(bmi)`.
+
+**Heaviest**
+
+```{r}
+heaviest <- d %>% 
+  group_by(sex) %>% 
+  filter(weight == max(weight, na.rm = TRUE)) %>% 
+  select(name, sex, height, weight, team, sport) %>% 
+  distinct()
+```
+
+The heaviest male was `r filter(heaviest, sex =="M") %>% pull(name)` with `r filter(heaviest, sex =="M") %>% pull(weight)` kg.  
+The heaviest female was `r filter(heaviest, sex =="F") %>% pull(name)` with `r filter(heaviest, sex =="F") %>% pull(weight)` kg.
+
+```{r}
+heaviest
+```
+
+**Weight by sport and sex**
+
+```{r fig.height=18}
+ggplot(
+  filter(d, !is.na(weight)), 
+  aes(
+    x = weight,
+    y = fct_rev(as.factor(sport)),
+    fill = sport
+  )) +
+  geom_boxplot(
+    width = 0.7, 
+    size = 0.2, 
+    outlier.size = 0.02, 
+    outlier.alpha = 0.5) +
+  scale_fill_manual(values = pal_length(
+    pal_spectrum,
+    length(unique(d$sport))
+  )) +
+  scale_x_continuous(limits = c(30, 150)) +
+  facet_wrap(~sex) +
+  theme(
+    legend.position = "none", 
+    axis.title.y = element_blank())
+```
+
+### Height
+
+**Shortest**
+
+```{r}
+shortest <- d %>% 
+  group_by(sex) %>% 
+  filter(height == min(height, na.rm = TRUE)) %>% 
+  select(name, sex, height, weight, team, sport) %>% 
+  distinct()
+```
+
+
+The shortest male was `r filter(shortest, sex =="M") %>% pull(name)` with `r filter(shortest, sex =="M") %>% pull(height)` cm.  
+The shortest female was `r filter(shortest, sex =="F") %>% pull(name)` with `r filter(shortest, sex =="F") %>% pull(height)` cm.  
+
+```{r}
+shortest
+```
+
+**Tallest**
+
+```{r}
+tallest <- d %>% 
+  group_by(sex) %>% 
+  filter(height == max(height, na.rm = TRUE)) %>% 
+  select(name, sex, height, weight, team, sport) %>% 
+  distinct()
+```
+
+The tallest male was `r filter(tallest, sex =="M") %>% pull(name)` with `r filter(tallest, sex =="M") %>% pull(height)` cm.  
+The tallest female was `r filter(tallest, sex =="F") %>% pull(name)` with `r filter(tallest, sex =="F") %>% pull(height)` cm.  
+
+```{r}
+tallest
+```
+
+
+**Height by sport and sex**
+
+```{r fig.height=18}
+ggplot(
+  filter(d, !is.na(height)), 
+  aes(
+    x = height,
+    y = fct_rev(as.factor(sport)),
+    fill = sport
+  )) +
+  geom_boxplot(
+    width = 0.7, 
+    size = 0.2, 
+    outlier.size = 0.02, 
+    outlier.alpha = 0.5) +
+  scale_fill_manual(values = pal_length(
+    pal_spectrum,
+    length(unique(d$sport))
+  )) +
+  facet_wrap(~sex) +
+  theme(
+    legend.position = "none", 
+    axis.title.y = element_blank())
+```
+
+### Participation
+
+Number of games in which the athlete has participated.
+```{r}
+d %>% 
+  select(id, name, games) %>% 
+  distinct() %>% 
+  count(id, name) %>% 
+  select(-id) %>% 
+  arrange(desc(n))
+```
+
+Number of games in which the athlete won a medal
+```{r}
+d %>% 
+  filter(!is.na(medal)) %>% 
+  select(id, name, games) %>% 
+  distinct() %>% 
+  count(id, name) %>% 
+  select(-id) %>% 
+  arrange(desc(n))
+```
 
 ## Medalists
 
@@ -241,6 +392,82 @@ medalists <- d %>% filter(!is.na(medal))
 skim(medalists)
 ```
 
+Medals by athlete
+
+```{r cols.print=6}
+medals_athlete <- d %>%
+  group_by(id, name) %>%
+  count(medal) %>%
+  mutate(medal = str_to_lower(medal)) %>%
+  pivot_wider(names_from = medal, values_from = n) %>%
+  select(-`NA`) %>%
+  mutate(across(c("gold", "silver", "bronze"), ~ replace_na(.x, 0))) %>%
+  mutate(total = gold + silver + bronze) %>%
+  ungroup() %>%
+  arrange(desc(total))
+
+sports_athlete <- d %>% 
+  select(id, sport) %>% 
+  distinct() %>% 
+  group_by(id) %>% 
+  mutate(nr = row_number()) %>% 
+  pivot_wider(names_from = nr, values_from = sport) %>% 
+  unite(sports, 2:ncol(.), sep = ", ", na.rm = TRUE) %>% 
+  ungroup()
+
+left_join(medals_athlete, sports_athlete, by = "id") %>% 
+  select(name, sports, total, gold, silver, bronze)
+```
+
+Male athletes with most olympic medals
+
+```{r}
+medalists %>% 
+  filter(sex == "M") %>% 
+  count(id, name) %>% 
+  slice_max(order_by = n, n = 10) %>% 
+  rename(medals = n) %>% 
+  rowid_to_column("rank") %>% 
+  left_join(sports_athlete) %>% 
+  select(-id)
+```
+
+Female athletes with most olympic medals
+
+```{r}
+medalists %>% 
+  filter(sex == "F") %>% 
+  count(id, name) %>% 
+  slice_max(order_by = n, n = 10) %>% 
+  rename(medals = n) %>% 
+  rowid_to_column("rank") %>% 
+  left_join(sports_athlete) %>% 
+  select(-id)
+```
+
+## Multipotentialites
+
+With the term *"multipotentialite"* I refer to athletes with olympic medals in multiple sports.
+
+Filter athletes with medals in more than 1 sport
+
+```{r}
+multipotentialite_id <- medalists %>% 
+  group_by(id) %>% 
+  count(sport) %>% 
+  count(id) %>% 
+  filter(n > 1) %>% 
+  pull(id)
+
+# number of multipotentialites
+n_unique(multipotentialite_id)
+
+# select multipotentialites among medalists
+multipotentialite <- filter(medalists, id %in% multipotentialite_id)
+multipotentialite
+```
+
+
 ## Country Stats
 
 ### Total Medals
@@ -248,6 +475,7 @@ skim(medalists)
 > Important note: this is just an approximation, because data are at athlete-level and *not* country-level. Thus, team sports are overrepresented, as a single winning event is assigned to multiple athletes.
 
 Total number of medals per country from `r min(d$year)` to `r max(d$year)`
+
 ```{r cols.print = 5}
 medal_count <- d %>% 
   group_by(region) %>% 
@@ -262,12 +490,11 @@ medal_count <- d %>%
 
 medal_count
 ```
-  
 
 ### Most Medals
 
-Top 25 countries with most olympic medals  
-*(not very informative —not taking number of athletes and times participated into account)*
+Top 25 countries with most olympic medals\
+*(not very informative ---not taking number of athletes and times participated into account)*
 
 ```{r rows.print = 25, cols.print = 6}
 medal_count %>% 
@@ -275,9 +502,10 @@ medal_count %>%
   rowid_to_column("rank")
 ```
 
-### Times Participated  
+### Times Participated
 
 Number of games in which countries have participated
+
 ```{r}
 times_participated <- d %>% 
   select(region, games) %>% 
@@ -293,6 +521,7 @@ times_participated
 ### Win Percentage
 
 Number of medalists (any color) divided by number of participants per country per year
+
 ```{r rows.print = 25, cols.print = 10, digits = 1}
 win_ratio <- left_join(
     count(d, region, year),
@@ -313,74 +542,67 @@ win_ratio %>%
 Country with highest medalists/participants ratio per year
 
 ```{r cols.print = 5, rows.print = 40}
-win_ratio %>% group_by(year) %>% filter(ratio == max(ratio)) %>% select(year, region, ratio, medalists, participants)
+win_ratio %>% 
+  group_by(year) %>% 
+  filter(ratio == max(ratio)) %>% 
+  select(year, region, ratio, medalists, participants)
 ```
 
 ### No Medals
 
 `r medal_count %>% filter(total == 0) %>% nrow()` participating countries are still awaiting their first medal.
+
 ```{r}
 medal_count %>% filter(total == 0) %>% pull(region)
 ```
 
-### Summer/Winter
-
-```{r fig.width = 4, fig.height=8}
-both_seasons <-
-  d %>% 
-  select(region, season) %>% 
-  distinct() %>% 
-  group_by(region) %>% 
-  count() %>% 
-  filter(n == 2) %>% 
-  pull(region)
-
-n_winter_medals <- medalists %>% filter(season == "Winter") %>% count() %>% pull(n)
-n_summer_medals <- medalists %>% filter(season == "Summer") %>% count() %>% pull(n) 
-
-medals_season <- medalists %>% 
-  filter(region %in% both_seasons) %>% 
-  group_by(region, season) %>% 
-  count() %>% 
-  mutate(prop_total = case_when(
-    season == "Winter" ~ n / n_winter_medals,
-    season == "Summer" ~ n / n_summer_medals
-  ))
-```
-
 ## Sports Stats
 
-Unique sports  
+### Unique Sports
+
+Winter Olympics
 ```{r}
 sports_winter <- d %>% 
   filter(season == "Winter") %>% 
   pull(sport) %>% 
   unique() %>% 
   sort()
-sports_winter
 
+sports_winter
+```
+
+Summer Olympics
+```{r}
 sports_summer <- d %>% 
   filter(season == "Summer") %>% 
   pull(sport) %>% 
   unique() %>% 
   sort()
+
 sports_summer
 ```
 
-Sports that have been part of both the summer and winter Olympics  
+Sports that have been part of both the summer and winter Olympics
 ```{r}
 base::intersect(sports_summer, sports_winter)
 ```
 
+
+### Times on Schedule
+  
 Times a sport has been on the Olympic schedule, incl. first and last year
 ```{r}
-sport_stats <- d %>% group_by(sport) %>% summarise(
-  first = min(year),
-  last = max(year),
-  times = n_unique(year)
+sport_stats <- d %>% 
+  group_by(sport) %>% 
+  summarise(
+    first = min(year),
+    last = max(year),
+    times = n_unique(year)
 )
-```
 
+sport_stats
+```
+  
 Sports that have been on the Olympic schedule only once
 ```{r rows.print = 10}
 sport_stats %>% 
@@ -390,16 +612,10 @@ sport_stats %>%
   arrange(desc(year))
 ```
 
-Number of unique sports and events
+Number of unique sports
 ```{r}
 sport_count <- d %>% 
   select(year, season, sport) %>% 
-  distinct() %>% 
-  group_by(year, season) %>% 
-  count()
-
-event_count <- d %>% 
-  select(year, season, event) %>% 
   distinct() %>% 
   group_by(year, season) %>% 
   count()
@@ -410,6 +626,15 @@ ggplot(sport_count, aes(x = year, y = n, color = season)) +
   scale_y_continuous(name = "Sports") +
   scale_x_continuous(name = "Year") +
   scale_fill_discrete(name = "Season")
+```
+
+Number of unique events
+```{r}
+event_count <- d %>% 
+  select(year, season, event) %>% 
+  distinct() %>% 
+  group_by(year, season) %>% 
+  count()
 
 ggplot(event_count, aes(x = year, y = n, color = season)) +
   geom_line() +
@@ -420,88 +645,9 @@ ggplot(event_count, aes(x = year, y = n, color = season)) +
   
 ```
 
-### Male Legends
-
-Male athlete(s) with most medals (any color) per sport, only shown if ≥3 medals
-```{r cols.print = 3, rows.print = 43}
-medalists %>% 
-  filter(sex == "M") %>% 
-  count(id, name, sport) %>% 
-  group_by(sport) %>% 
-  filter(n == max(n) & n >= 3) %>% 
-  select(-id) %>% 
-  group_by(sport) %>% 
-  mutate(nr = row_number()) %>% 
-  pivot_wider(names_from = nr, values_from = name) %>% 
-  unite("athletes", 3:ncol(.), sep = ", ", na.rm = TRUE) %>% 
-  rename(medals = n) %>% 
-  arrange(sport)
-```
-
-### Female Legends
-
-Female athlete(s) with most medals (any color) per sport, only shown if ≥3 medals
-```{r cols.print = 3, rows.print = 38}
-medalists %>% 
-  filter(sex == "F") %>% 
-  count(id, name, sport) %>% 
-  group_by(sport) %>% 
-  filter(n == max(n) & n >= 3) %>% 
-  select(-id) %>% 
-  group_by(sport) %>% 
-  mutate(nr = row_number()) %>% 
-  pivot_wider(names_from = nr, values_from = name) %>% 
-  unite("athletes", 3:ncol(.), sep = ", ", na.rm = TRUE) %>% 
-  rename(medals = n) %>% 
-  arrange(sport)
-```
-
-## Individual Stats
-
-Top 10 male athletes with most olympic medals
-```{r}
-medalists %>% 
-  filter(sex == "M") %>% 
-  count(name) %>% 
-  slice_max(order_by = n, n = 10) %>% 
-  rename(medals = n) %>% 
-  rowid_to_column("rank")
-```
-
-Top 10 female athletes with most olympic medals
-```{r}
-medalists %>% 
-  filter(sex == "F") %>% 
-  count(name) %>% 
-  slice_max(order_by = n, n = 10) %>% 
-  rename(medals = n) %>% 
-  rowid_to_column("rank")
-```
-
-## Multipotentialites
-
-With the term *"multipotentialite"* I refer to athletes with olympic medals in multiple sports.
-
-Filter athletes with medals in >1 sport
-```{r}
-multipotentialite_id <- medalists %>% 
-  group_by(id) %>% 
-  count(sport) %>% 
-  count(id) %>% 
-  filter(n > 1) %>% 
-  pull(id)
-
-# number of multipotentialites
-n_unique(multipotentialite_id)
-
-# select multipotentialites among medalists
-multipotentialite <- filter(medalists, id %in% multipotentialite_id)
-multipotentialite
-```
-
 # Chord Diagram
 
-I decided to create a chord diagram of the crossover between sports by multipotentialites.
+I decided to create a chord diagram of the crossover between sports by *multipotentialites*.
 
 ## Data Preparation
 
@@ -542,7 +688,6 @@ bidirectional
 ### Unique Sports
 
 ```{r}
-# unique sports
 sports <- medalists %>% 
   filter(id %in% multipotentialite_id) %>% 
   pull(sport) %>% 
@@ -553,7 +698,6 @@ sports
 ```
 
 ```{r}
-# number of unique sports
 nsports <- length(sports)
 nsports
 ```
@@ -593,7 +737,7 @@ colors <- rep("#e3ded3", times = nsports)
 names(colors) <- sports 
 
 # specify manual palette
-manual_pal_1 <-
+manual_pal <-
   pal_length(
     c(
       "#da3238",
@@ -608,58 +752,15 @@ manual_pal_1 <-
   )
 
 # replace base color with color from palette for selected sports
-colors[which(sports %in% colorsport)] <- manual_pal_1
+colors[which(sports %in% colorsport)] <- manual_pal
 
 # show colors
 colorspace::swatchplot(colors)
-
-# try different palettes
-manual_pal_2 <- pal_length(
-  c(
-    "#edad08",
-    "#e17c05",
-    "#cc503e",
-    "#94346e",
-    "#6f4070",
-    "#5f4690",
-    "#1d6996",
-    "#38a6a5",
-    "#0f8554",
-    "#73af48"
-  ),
-  length(colorsport)
-)
-colors[which(sports %in% colorsport)] <- manual_pal_2
-colorspace::swatchplot(colors)
-
-manual_pal_3 <- pal_length(
-  c(
-    "#b53471",
-    "#b3438e",
-    "#aa55aa",
-    "#9b66c1",
-    "#8777d4",
-    "#6d87e2",
-    "#4c96e9",
-    "#1ba3ea",
-    "#00afe6",
-    "#00b9dd",
-    "#00c3d2",
-    "#12cbc4"
-  ),
-  length(colorsport
-  )
-)
-colors[which(sports %in% colorsport)] <- manual_pal_3
-colorspace::swatchplot(colors)
-
-# choose palette #1
-colors[which(sports %in% colorsport)] <- manual_pal_1
 ```
 
 ## Draw Chord
 
-I decided to plot the chord diagram with the `circlize` package in R.
+In a first attempt I created the chord diagram with the `circlize` package in R.
 
 ```{r}
 chordDiagram(
@@ -670,14 +771,14 @@ chordDiagram(
 )
 ```
 
-This result wasn't exactly what I had in mind (apologies for not fixing the ugly labels).  
+This result wasn't exactly what I had in mind (apologies for not fixing the ugly labels).
 
-The chord diagram is non-directional due to the symmetric nature of the data. Therefore, coloring according to only one of the two sports feels inappropriate. An alternative is to create gradient chords based on the colors of both the source *and* target sport ---instead of only using the source color.  
+The chord diagram is non-directional due to the symmetric nature of the data. Therefore, coloring according to only one of the two sports feels inappropriate. An alternative is to create gradient chords based on the colors of both the source *and* target sport ---instead of only using the source color.
 
-I read a great blog post by [Nadieh Bremer](https://www.visualcinnamon.com/2016/06/orientation-gradient-d3-chord-diagram/) on how to achieve this with SVG in D3. Unfortunately, I haven't figured out a way to do this with R yet. Therefore, I decided to continue the visualization in an [Observable](https://observablehq.com/) notebook using *SVG* and *D3.js*.  
-  
-Link: [Observable notebook](https://observablehq.com/@philomenix/olympic-multipotentialites)
-  
+I read a great blog post by [Nadieh Bremer](https://www.visualcinnamon.com/2016/06/orientation-gradient-d3-chord-diagram/) on how to achieve this with SVG in D3. Unfortunately, I haven't figured out a way to do this with R yet. Therefore, I decided to continue the visualization in an [Observable](https://observablehq.com/) notebook using *SVG* and *D3.js*.
+
+> Link: [Observable notebook](https://observablehq.com/@philomenix/olympic-multipotentialites)  
+
 ## Write Arrays
 
 To use the data in Observable, I formatted the data as javascript arrays (in plain text) for copy-pasting into an [Observable](https://observablehq.com/) notebook.
@@ -730,6 +831,7 @@ cat(paste0('["', paste(colors, collapse='","'), '"]'))
 ![](./img/observable.png)
 
 *Session Info*
+
 ```{r}
 sessionInfo()
 ```
