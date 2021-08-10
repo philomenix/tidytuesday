@@ -56,7 +56,7 @@ ggplot2::theme_set(hrbrthemes::theme_ipsum_rc())
 # Result
 
 ```{r echo = FALSE}
-knitr::include_graphics(here::here("result", glue::glue("{yr}_{wk}_1.png")))
+knitr::include_graphics(here::here("result", glue::glue("{yr}_{wk}.png")))
 ```
 
 # Setup

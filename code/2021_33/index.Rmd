@@ -1,0 +1,872 @@
+---
+title: "Paralympic Medals"
+date: "WK 32, 2021"
+output:
+  html_document:  
+    df_print: paged
+    css: ../../css/pastel.css
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: no
+    number_sections: yes
+    editor_options:
+      chunk_output_type: console
+---
+
+```{r setup, include = FALSE}
+# use blank slate
+usethis::use_blank_slate()
+
+# clear workspace
+rm(list = ls(all = TRUE))
+
+# year and week
+yr <- 2021
+wk <- 32
+
+# set working directory
+wd <- here::here("code", glue::glue("{yr}_{wk}"))
+
+# chunk options
+knitr::opts_chunk$set(
+	eval = TRUE,
+	echo = TRUE,
+	include = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	fig.height = 10 / 1.618, # golden ratio
+	fig.width = 10,
+	dev = "ragg_png", 
+	res = 500, 
+	retina = 1,
+	class.output="style-output",
+  class.source="style-source"
+)
+
+# set options
+options(
+  digits = 3,
+  rows.print = 15,
+  cols.print = 4,
+  paged.print = TRUE
+)
+
+# set locale
+Sys.setlocale(category = "LC_ALL", locale = "en_US.UTF-8")
+
+# helper functions
+# source(here::here("code", "helpers", "helpers.R"), local = knitr::knit_global())
+
+# set ggplot theme
+# ggplot2::theme_set(hrbrthemes::theme_ipsum_rc())
+```
+
+# Result
+
+```{r echo = FALSE}
+knitr::include_graphics(here::here("result", glue::glue("{yr}_{wk}.png")))
+```
+
+# Setup
+
+```{r}
+pacman::p_load(
+  ggforce, 
+  glue,
+  here,
+  # lubridate,
+  magrittr,
+  tidyverse
+)
+```
+
+```{r include = FALSE}
+library(rvest)
+
+tt_info <- glue("https://github.com/rfordatascience/tidytuesday/tree/master/data/{yr}") %>% 
+  read_html() %>% 
+  html_element("table") %>% 
+  html_table() %>% 
+  filter(Week == wk)
+
+tt_dictionary <- glue("https://github.com/rfordatascience/tidytuesday/blob/master/data/{yr}/{tt_info$Date}") %>% 
+  read_html() %>% 
+  html_element("table") %>% 
+  html_table()
+```
+
+# Background
+
+Background information: [Tidy Tuesday](https://github.com/rfordatascience/tidytuesday/blob/master/data/2021/2021-08-03/readme.md)  
+Data source: [International Paralympic Committee](https://db.ipc-services.org/sdms/hira/web/index)
+
+## Data Dictionary
+
+```{r echo = FALSE}
+tt_dictionary %>% select(-class)
+```
+
+# Raw Data
+
+Get data and write to local file
+
+```{r eval = FALSE}
+# get data
+paralympics <- tidytuesdayR::tt_load(yr, week = wk) %>% 
+  pluck("athletes")
+
+# write to local file 
+write_csv(paralympics, here("data", glue("data_{yr}_{wk}_1.csv")))
+```
+
+Read data from local file (`d_raw`) and create working copy (`d`)
+
+```{r}
+# raw data
+d_raw <- read_csv(
+  here("data", glue("data_{yr}_{wk}_1.csv")),
+  col_types = cols(.default = "c"),
+  na = c("NA", "NULL", "")
+)
+# working copy
+d <- d_raw
+```
+
+# Inspection
+
+```{r rows.print = 20}
+d
+```
+
+```{r}
+glimpse(d)
+```
+
+# Coercion
+
+```{r}
+d %<>% mutate(across(c("year", "grp_id"),  ~ as.numeric(.x)))
+d %<>% mutate(across(c("gender", "medal", "abb", "country", "type"),  ~ factor(.x)))
+```
+
+# Exploration
+
+## skimr
+
+```{r}
+skimr::skim(d)
+```
+
+## DataExplorer
+
+```{r}
+DataExplorer::introduce(d) %>% 
+  pivot_longer(cols = everything())
+```
+
+`guide` is empty; drop column
+```{r}
+d %<>% select(-guide) 
+```
+
+# Data Preparation
+
+I've been intrigued to create something similar to Shirley Wu's Film Flowers in R. I thought this dataset was a good opportunity. I've recreated Shirley's project before with SVG and D3.js, but didn't know if it would be possible in R. I ended up using `geom_bezier()` from the `ggforce` package. And instead of rotating SVG groups, I used `coord_polar()` to rotate the shapes around the origin.  
+
+I created petal shaped decorations on all medals of the greatest Paralympic athlete of all time: *Trischa Zorn*. She won 46 (official stats) or 55 (unofficial stats) swimming medals during 5 Paralympic events. The number of petals corresponds to the distance (1 petal equals 25 meters), and the shape of the petal represents the swimming style (*backstroke/breaststroke/butterfly/freestyle/medley*). 
+
+## Filter
+
+The first step is to filter the data for Trischa Zorn.
+```{r}
+d %>% filter(str_detect(str_squish(str_to_lower(athlete)), "zorn trischa"))
+```
+
+Filtering the data for *Trischa Zorn* results in 44 records. But according to online resources, she won either 46 (official IPC count) or 55 Paralympic medals. In de early days they weren't really keeping track of the events, therefore not all medals were officially recorded.  
+Background: [Interview with Trischa Zorn](https://en.wikinews.org/wiki/Wikinews_interviews_winner_of_55_Paralympic_medals,_Trischa_Zorn) 
+
+## Discrepancies
+
+44 medals is 2 less than the official count of 46. Her active period was from 1980-2004 --within the timeframe of the data (1980-2016). So, that cannot be the explanation. It could result from typing errors.  
+
+First, I searched for `"zorn"` (without the first name), but that didn't solve the problem.
+```{r rows.print = 60}
+d %>% 
+  filter(str_detect(str_squish(str_to_lower(athlete)), "zorn")) %>% 
+  pull(athlete) %>% 
+  unique()
+```
+
+Next, I searched for `"trischa"` (without the last name), but again without luck.
+```{r}
+d %>% 
+  filter(str_detect(str_squish(str_to_lower(athlete)), "trischa")) %>% 
+  pull(athlete) %>% 
+  unique()
+```
+
+Finally I used the `stringdist` package to compute the distance between the `athlete` string and `"zorn trischa"`. This returns the most similar names:
+```{r}
+d %>% 
+  mutate(distance = stringdist::stringdist(
+      str_squish(str_to_lower(athlete)), 
+      "zorn trischa")) %>% 
+  arrange(distance) %>% 
+  select(athlete, distance) %>% 
+  distinct() %>% 
+  slice_head(n = 10)
+```
+
+## Replace Data
+
+Since I couldn't identify the cause of the discrepancy, I decided to manually copy the table from (https://db.ipc-services.org/sdms/hira/web/paralympians)[https://db.ipc-services.org/sdms/hira/web/paralympians].
+
+```{r}
+d <- html_table(read_html(glue("{wd}/zorn.html")))[[2]]
+colnames(d) <- c("games", "sport", "event", "medal")
+d
+```
+
+## Wrangle
+
+```{r}
+d %<>% 
+  mutate(
+    year = as.integer(str_sub(games, -4, -1)),
+    place = factor(str_sub(games, 1, -6)),
+    event = str_remove(event, "Women's ") %>% 
+      str_replace(" m ", "m ") %>% 
+      str_replace("Individual Medley", "Medley"),
+    medal = str_remove(medal, " Medal") %>% str_replace("-", ""),
+    rank = case_when(
+      medal == "Gold" ~ 1,
+      medal == "Silver" ~ 2,
+      medal == "Bronze" ~ 3
+    )) %>% 
+  select(-games) %>% 
+  separate(
+    col = "event",
+    into = c("distance", "style", "classification"),
+    sep = " "
+  ) %>% 
+  mutate(
+    across(
+      c("sport", "style", "classification", "medal"), 
+      ~ as.factor(.x))) %>% 
+  mutate(
+    meters = case_when(
+      distance == "4x100m" ~ 100,
+      distance == "4x50m" ~ 50,
+      TRUE ~ parse_number(distance)
+    )) %>% 
+  mutate(four_times = str_detect(distance, "4x"))
+```
+
+This indeed results in the expected medal count of **46**.
+```{r}
+d %>% count(medal)
+```
+
+
+```{r include = FALSE, eval = FALSE}
+#----------#
+# NOT USED #
+#----------#
+
+# get links to pages of individual races/events
+
+d$event <- read_html(glue("{wd}/zorn.html")) %>% 
+  html_elements("tr>td:nth-child(3)>a") %>% 
+  html_attr("href") %>% 
+  paste0("https://db.ipc-services.org",.)
+
+# scrape finish times
+
+times <- character(nrow(d))
+
+for(i in 1:nrow(d)) {
+  tryCatch({
+    ls <- read_html(d$event[i]) %>%
+      html_elements("tbody") %>%
+      html_table()
+    times[i] <- ls[[length(ls)]] %>%
+      filter(X2 == "ZORN Trischa") %>%
+      pull(X7)
+  }, error = function(e) {
+  })
+}
+
+# manually add missing times for pages with a slightly different HTML structure
+
+times[13] <- "DQ" # not in final
+times[19] <- "4:57.32" # team United States; filter by name doesn't work
+times[20] <- "5:29.71" # team United States; filter by name doesn't work
+times[31] <- "4:46.85" # team United States; filter by name doesn't work
+times[32] <- "5:21.49" # team United States; filter by name doesn't work
+d$time <- times 
+
+```
+
+Filter races with medals
+```{r}
+d %<>% filter(medal != "")
+```
+
+Add columns for visualization
+```{r}
+d %<>% 
+  arrange(year, rank, style, meters) %>% 
+  rowid_to_column() %>% 
+  rename(id = rowid) %>%
+  group_by(year) %>% 
+  mutate(seq = row_number()) %>% 
+  ungroup() %>% 
+  mutate(
+    reps_linear = meters / 25,
+    reps_nonlinear = recode(
+      meters,
+      `50` = 2,
+      `100` = 4,
+      `200` = 6,
+      `400` = 8),
+    shape = recode(
+      style,
+      "Freestyle" = 1,
+      "Medley" = 2,
+      "Breaststroke" = 3,
+      "Backstroke" = 4,
+      "Butterfly" = 5)
+  ) %>% 
+  group_by(style, distance) %>% 
+  mutate(nth_type = row_number()) %>%
+  ungroup()
+
+color_medals <- c("#dfb70f", "#b3b8bc", "#ae7057")
+
+d %<>% left_join(
+  tribble(
+    ~medal, ~main,
+    "Gold", color_medals[1],
+    "Silver", color_medals[2],
+    "Bronze", color_medals[3]) %>% 
+  mutate(
+    lighter = colorspace::lighten(main, amount = 0.4) %>% tolower(),
+    darker = colorspace::darken(main, amount = 0.1) %>% tolower()), 
+  by = "medal")
+```
+
+Inspect data
+```{r}
+d
+glimpse(d)
+```
+
+Write data as *.csv*
+```{r}
+d %>% write_csv(here("data", glue("data_{yr}_{wk}_2.csv")))
+```
+
+# Draw Medals
+
+```{r}
+sysfonts::font_add_google(name = "Barlow Semi Condensed", family = "barlow")
+showtext::showtext_auto()
+
+txt_dark <- "#282822"
+txt_light <- "#7a766f"
+```
+
+## Shapes
+
+### Create
+
+```{r}
+shapes <- list(
+  tribble(
+    ~line, ~x, ~y,
+    1, 0, 10,
+    1, 50, 40,
+    1, 50, 70,
+    1, 20, 100,
+    2, 20, 100,
+    2, 10, 90,
+    2, 0, 85,
+    3, 0, 85,
+    3, -10, 90,
+    3, -20, 100,
+    4, -20, 100,
+    4, -50, 70,
+    4, -50, 40,
+    4, 0, 10
+  ),
+  tribble(
+    ~line, ~x, ~y,
+    1, 0, 10,
+    1, 50, 25,
+    1, 50, 75,
+    1, 0, 100,
+    2, 0, 100,
+    2, -50, 75,
+    2, -50, 25,
+    2, 0, 10, 
+  ),
+  tribble(
+    ~line, ~x, ~y,
+    1, -35, 10,
+    1, -25, 75, 
+    1, 25, 75,
+    1, 35, 10,
+    2, 35, 10,
+    2, 50, 25,
+    2, 25, 75,
+    2, 0, 100,
+    3, 0, 100,
+    3, -25, 75,
+    3, -50, 25,
+    3, -35, 10
+  ),
+  tribble(
+    ~line, ~x, ~y,
+    1, 0, 40,
+    1, -15, 40,
+    1, -10, 10,
+    2, -10, 10,
+    2, -40, 10,
+    2, -40, 50,
+    3, -40, 50,
+    3, -40, 90,
+    3, -20, 100,
+    4, -20, 100,
+    4, -30, 75,
+    4, -10, 60,
+    5, -10, 60,
+    5, -5, 80,
+    5, 0, 80,
+    6, 0, 80,
+    6, 5, 80,
+    6, 10, 60,
+    7, 10, 60,
+    7, 30, 75,
+    7, 20, 100,
+    8, 20, 100,
+    8, 40, 90,
+    8, 40, 50,
+    9, 40, 50,
+    9, 40, 10,
+    9, 10, 10,
+    10, 10, 10,
+    10, 15, 40,
+    10, 0, 40
+  ),
+  tribble(
+    ~line, ~x, ~y,
+    1, 0, 100,
+    1, -10, 65,
+    1, -35, 100,
+    1, -40, 85,
+    2, -40, 85,
+    2, -45, 75,
+    2, -45, 55,
+    2, -20, 10,
+    3, -20, 10,
+    3, -30, 80,
+    3, -30, 80,
+    3, 0, 55,
+    4, 0, 55,
+    4, 30, 80,
+    4, 30, 80,
+    4, 20, 10,
+    5, 20, 10,
+    5, 45, 55,
+    5, 45, 75,
+    5, 40, 85,
+    6, 40, 85,
+    6, 35, 100,
+    6, 10, 65,
+    6, 0, 100
+  )
+)
+```
+
+### Transform
+
+```{r}
+shapes %<>% map(~.x %>% 
+                rename(x_src = x) %>% 
+                mutate(
+                  # shift x to start at 0 (only positive values)
+                  x_abs = x_src + abs(min(x_src)),
+                  # normalize x to range 0-100
+                  x = x_abs / max(x_abs) * 100) %>% 
+                select(-x_abs, -x_src)) 
+
+```
+
+### Total Width
+
+```{r}
+total_width <- max(d$reps_nonlinear) * 100
+```
+
+
+### Preview 
+
+Preview single shapes
+```{r}
+preview_single <- function(tbl){
+  ggplot() +
+    ggforce::geom_bezier(aes(x = x, y = y, group = line), data = tbl) +
+    lims(x = c(0, 100), y = c(0, 100)) +
+    theme_void() +
+    coord_fixed(ratio = 2)
+}
+```
+
+```{r fig.width = 4, fig.height = 4}
+preview_single(shapes[[1]])
+preview_single(shapes[[2]])
+preview_single(shapes[[3]])
+preview_single(shapes[[4]])
+preview_single(shapes[[5]])
+```
+
+Preview polar shapes
+```{r}
+preview_polar <- function(tbl, n){
+  preview <- tibble()
+  for (j in 1:n) {
+    shape <- tbl %>%
+      mutate(
+        shape_id = rep(j, nrow(.)),
+        line = paste(j, line, sep = "-"),
+        xgrid = x + (j - 1) * (total_width / n)
+      )
+    preview %<>% bind_rows(shape)
+  }
+  ggplot() +
+    ggforce::geom_bezier(aes(x = xgrid, y = y, group = line), data = preview) +
+    scale_x_continuous(limits = c(0, total_width)) +
+    scale_y_continuous(limits = c(0, 100)) +
+    theme_void() +
+    coord_polar()
+}
+```
+
+```{r fig.width = 4, fig.height = 4}
+preview_polar(shapes[[1]], 6)
+preview_polar(shapes[[2]], 6)
+preview_polar(shapes[[3]], 6)
+preview_polar(shapes[[4]], 6)
+preview_polar(shapes[[5]], 6)
+```
+
+## Coordinates
+
+```{r}
+pd <- tibble()
+
+for(i in 1:nrow(d)){
+  n <- d$reps_nonlinear[i]
+  step <- total_width / n
+  tbl <- tibble()
+  for(j in 1:n){
+    shape <- shapes[[d$shape[i]]] %>% 
+      mutate(
+        shape_id = rep(j, nrow(.)),
+        line = paste(j, line, sep = "-"),
+        xgrid = x + (j - 1) * step)
+    tbl %<>% bind_rows(shape)
+  }
+  tbl %<>% mutate(medal_id = rep(d$id[i], nrow(.)))
+  pd %<>% bind_rows(tbl) 
+}
+
+pd %<>% left_join(d, by = c("medal_id" = "id"))
+pd
+```
+
+## Draw Medals
+
+### Add Shapes and Facet
+
+```{r fig.width = 8, fig.height = 12}
+ggplot(data = pd) +
+  ggforce::geom_bezier(aes(x = xgrid, y = y, group = line), color = "black") +
+  scale_y_continuous(limits = c(0, 100)) +
+  scale_x_continuous(limits = c(0, total_width)) +
+  facet_grid(seq ~ year)
+```
+
+### Add Medal Colors
+
+```{r fig.width = 8, fig.height = 12}
+ggplot(data = pd) +
+  geom_rect(xmin = 0, xmax = total_width, ymin = 0, ymax = 110, aes(fill = main)) +
+  geom_rect(xmin = 0, xmax = total_width, ymin = 110, ymax = 120, aes(fill = darker)) +
+  ggforce::geom_bezier(aes(x = xgrid, y = y, group = line, color = lighter)) +
+  scale_fill_identity() + 
+  scale_color_identity() + 
+  scale_x_continuous(limits = c(0, total_width)) +
+  scale_y_continuous(limits = c(0, 120)) +
+  facet_grid(seq ~ year)
+```
+
+### Polar Coordinates
+
+```{r fig.width = 8, fig.height = 16}
+ggplot(data = pd) +
+  geom_rect(xmin = 0, xmax = total_width, ymin = 0, ymax = 110, aes(fill = main)) +
+  geom_rect(xmin = 0, xmax = total_width, ymin = 110, ymax = 120, aes(fill = darker)) +
+  ggforce::geom_bezier(aes(x = xgrid, y = y, group = line, color = lighter)) +
+  scale_fill_identity() + 
+  scale_color_identity() + 
+  scale_x_continuous(limits = c(0, total_width)) +
+  scale_y_continuous(limits = c(0, 120)) +
+  coord_polar(start = -((pi / (total_width / 2)) * 50)) +
+  facet_grid(seq ~ year)
+```
+
+
+```{r}
+seq_data <- tibble()
+for(i in 1:nrow(d)){
+  s <- rep(d$seq[i], d$nth_type[i])
+  y <- rep(d$year[i], d$nth_type[i])
+  n <- 1:d$nth_type[i]
+  f <- rep(d$lighter[i], d$nth_type[i])
+  seq_data %<>% bind_rows(
+    tibble(
+      seq = s, 
+      year = y, 
+      nth = n, 
+      clr = f,
+      x = n * 40))
+}
+```
+
+```{r}
+facet_label <- d %>% 
+  select(year, place) %>% 
+  distinct() %>% 
+  arrange(year) %>% 
+  unite(label, 1:2, sep = ", ") %>% 
+  pull(label)
+names(facet_label) <- facet_label
+```
+
+
+### Theme Adjustments
+```{r fig.width = 14, fig.height = 24}
+ggplot(data = pd) +
+  geom_rect(
+    aes(fill = main),
+    xmin = 0, 
+    xmax = total_width, 
+    ymin = 0, 
+    ymax = 120) +
+  geom_rect(
+    aes(fill = darker),
+    xmin = 0, 
+    xmax = total_width, 
+    ymin = 120,
+    ymax = 160) +
+  geom_rect(
+    aes(fill = lighter),
+    xmin = 0, 
+    xmax = total_width, 
+    ymin = 160, 
+    ymax = 170) +
+  geom_bezier(
+    aes(x = xgrid, y = y, group = line), 
+    color = "white", 
+    size = 0.45) +
+  geom_point(
+    aes(x = x, color = clr), 
+    y = 140, 
+    size = 2, 
+    data = seq_data) + 
+  geom_point(
+    aes(
+      fill = ifelse(four_times, "white", NA),
+      color = ifelse(four_times, lighter, NA)), 
+    x = total_width / 2, 
+    y = 0, 
+    size = 5, 
+    shape = 21) +
+  # geom_text(
+  #   aes(label = ifelse(four_times, "4", NA)),
+  #   color = txt_light,
+  #   x = total_width / 2, 
+  #   y = 0) +
+  scale_fill_identity() +
+  scale_color_identity() +
+  scale_x_continuous(limits = c(0, total_width)) +
+  scale_y_continuous(limits = c(0, 170)) +
+  coord_polar(start = -((pi / (total_width / 2)) * 50)) +
+  facet_grid(seq ~ year) +
+  theme_void() +
+  theme(
+    strip.text.x = element_blank(),
+    strip.text.y = element_blank(),
+    panel.spacing = unit(0, "lines"),
+    legend.position = "none")
+
+ggsave(glue("{wd}/img/medals.pdf"), width = 2800, height = 4800, unit = "px")
+ggsave(glue("{wd}/img/medals.png"), width = 2800, height = 4800, unit = "px")
+```
+
+```{r include = FALSE, eval = FALSE}
+## draw ribbons / NOT USED
+d %<>% 
+  group_by(style, distance) %>% 
+  mutate(nth_type = row_number()) %>%
+  ungroup()
+
+ribbon_colors <- rev(colorspace::sequential_hcl(7, palette = "Teal"))
+ribbon_colors_dark <- colorspace::darken(ribbon_colors, amount = 0.2, space = "HCL") %>% colorspace::desaturate(amount = 0.1)
+colorspace::swatchplot(c(ribbon_colors, ribbon_colors_dark))
+
+
+ribbon_data <- d %>% 
+  select(id, year, seq, nth_type, place) %>% 
+  left_join(tibble(
+    id = rep(1:nrow(d), each = 8),
+    segment = rep(rep(c("L", "R"), each = 4), times = nrow(d)),
+    x = rep(c(1, 2, 3, 2, 1, 2, 1, 0), times = nrow(d)),
+    y = rep(c(0, 0, 2, 2), times = 2 * nrow(d))
+  ), by = "id") %>% 
+  mutate(
+    fill = ifelse(segment == "L", ribbon_colors[nth_type], ribbon_colors_dark[nth_type]),
+    color = ifelse(nth_type > 4, ribbon_colors[1], ribbon_colors[7])
+  )
+
+ggplot(data = ribbon_data) +
+  geom_polygon(aes(x,y, fill = fill)) +
+  geom_text(aes(label = year, color = color), x = 2, y = 1, angle = 65) +
+  scale_fill_identity() +
+  scale_color_identity() +
+  coord_equal() +
+  facet_grid(seq ~ year) +
+  theme_void() +
+  theme(
+    strip.text.y = element_blank(),
+    strip.text.x = element_blank(),
+    legend.position = "none")
+```
+
+## Draw Legends
+
+### Shape Legend
+
+```{r fig.width = 2, fig.height = 10}
+shape_legend <- tibble()
+
+for(i in 1:5){
+  n <- 6
+  step <- total_width / n
+  tbl <- tibble()
+  for(j in 1:n){
+    shape <- shapes[[i]] %>% 
+      mutate(
+        lineid = rep(j, nrow(.)),
+        line = paste(j, line, sep = "-"),
+        xgrid = x + (j - 1) * step)
+    tbl %<>% bind_rows(shape)
+  }
+  shape_legend %<>% bind_rows(tbl %>% mutate(item = i)) 
+}
+
+shape_labels <- d %>% select(style, shape) %>% distinct() %>% pull(style) %>% as.character()
+names(shape_labels) <- d %>% select(style, shape) %>% distinct() %>% pull(shape) 
+
+ggplot(data = shape_legend) +
+  ggforce::geom_bezier(aes(x = xgrid, y = y, group = line), color = txt_light) +
+  scale_y_continuous(limits = c(0, 100)) +
+  scale_x_continuous(limits = c(0, total_width)) +
+  coord_polar(start = -((pi / (total_width / 2)) * 50)) +
+  facet_wrap(
+    ~item, 
+    ncol = 1, 
+    labeller = as_labeller(shape_labels), 
+    strip.position = "bottom") +
+  theme(
+    line = element_blank(),
+    legend.position = "none",
+    plot.background = element_blank(),
+    panel.background = element_blank(),
+    strip.text.x = element_text(family = "barlow", size = 12, hjust = 0.5, color = txt_dark),
+    strip.background = element_rect(fill = NA, color = NA),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank()
+    )
+
+ggsave(glue("{wd}/img/legend_shape.pdf"), width = 500, height = 2500, units = "px")
+ggsave(glue("{wd}/img/legend_shape.png"), width = 500, height = 2500, units = "px")
+```
+
+### Count Legend
+
+```{r fig.width = 2, fig.height = 8}
+count_legend <- tibble()
+
+for(petals in c(2, 4, 6, 8)){
+  step <- total_width / petals
+  tbl <- tibble()
+  for(i in 1:petals){
+    shape <- shapes[[1]] %>% 
+      mutate(
+        lineid = rep(i, nrow(.)),
+        line = paste(i, line, sep = "-"),
+        xgrid = x + (i - 1) * step)
+    tbl %<>% bind_rows(shape)
+  }
+  count_legend %<>% bind_rows(tbl %>% mutate(item = i)) 
+}
+
+count_labels <- c("50m", "100m", "200m", "400m")
+names(count_labels) <- c(2, 4, 6, 8)
+
+ggplot(data = count_legend) +
+  ggforce::geom_bezier(aes(x = xgrid, y = y, group = line), color = txt_light) +
+  scale_y_continuous(limits = c(0, 100)) +
+  scale_x_continuous(limits = c(0, total_width)) +
+  coord_polar(start = -((pi / (total_width / 2)) * 50)) +
+  facet_wrap(
+    ~item, 
+    ncol = 1, 
+    labeller = as_labeller(count_labels), 
+    strip.position = "bottom") +
+  theme(
+    line = element_blank(),
+    legend.position = "none",
+    plot.background = element_blank(),
+    panel.background = element_blank(),
+    strip.text.x = element_text(family = "barlow", size = 12, hjust = 0.5, color = txt_dark),
+    strip.background = element_rect(fill = NA, color = NA),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank()
+    )
+
+ggsave(glue("{wd}/img/legend_count.pdf"), width = 500, height = 2000, units = "px")
+ggsave(glue("{wd}/img/legend_count.png"), width = 500, height = 2000, units = "px")
+```
+
+### Column Headers
+
+```{r}
+d %>% select(year, place) %>% distinct()
+```
+
+
+# Session Info
+
+```{r}
+Sys.time()
+sessionInfo()
+```
